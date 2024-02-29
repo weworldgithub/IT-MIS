@@ -63,7 +63,7 @@ $matchingDevice = $devices | Where-Object { $_.teamviewerId -eq $cid }
 
 # Define Alias Variables
 $cname = $env:COMPUTERNAME
-$uname = $env:username
+$uname = $(Get-WMIObject -class Win32_ComputerSystem | select username).username
 
 # If a matching device is found, update the alias
 if ($matchingDevice) {
