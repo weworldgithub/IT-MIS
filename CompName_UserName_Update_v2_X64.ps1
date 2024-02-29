@@ -32,7 +32,7 @@
 	You can change the System Variables to have a different
 	Alias Name. Per default the Script use 
 	$cname = $env:COMPUTERNAME
-	$uname = $env:username
+	$uname = $(Get-WMIObject -class Win32_ComputerSystem | select username).username
 
 
  .NOTES
