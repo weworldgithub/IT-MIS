@@ -112,12 +112,14 @@ if ($tvHostInstalled) {
 # Percorsi possibili per la directory di installazione di TeamViewer
 $programFilesX86 = "${env:ProgramFiles(x86)}\TeamViewer"
 $programFiles = "${env:ProgramFiles}\TeamViewer"
+$tvExeName = "TeamViewer.exe"
 
 if (Test-Path $programFilesX86) {
     Write-Host "Cambio directory a: $programFilesX86"
     Set-Location -Path $programFilesX86
+    $tvExeFullPath = Join-Path $programFilesX86 $tvExeName
     try {
-        .\TeamViewer.exe assignment --id "$assignidtw"
+        & "$tvExeFullPath" assignment --id "$assignidtw"
         Write-Host "Comando di assegnazione (x86) inviato."
     } catch {
         Write-Warning "Errore durante l'assegnazione (x86): $($_.Exception.Message)"
@@ -128,8 +130,9 @@ if (Test-Path $programFilesX86) {
 } elseif (Test-Path $programFiles) {
     Write-Host "Cambio directory a: $programFiles"
     Set-Location -Path $programFiles
+    $tvExeFullPath = Join-Path $programFiles $tvExeName
     try {
-        .\TeamViewer.exe assignment --id "$assignidtw"
+        & "$tvExeFullPath" assignment --id "$assignidtw"
         Write-Host "Comando di assegnazione (x64) inviato."
     } catch {
         Write-Warning "Errore durante l'assegnazione (x64): $($_.Exception.Message)"
