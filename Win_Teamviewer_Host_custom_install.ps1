@@ -24,40 +24,59 @@ if ([string]::IsNullOrEmpty($assignidtw))  { throw "Assignment ID mancante. Usa 
 
 Write-Host "Verifica presenza di versioni TeamViewer installate..."
 
-# Percorsi possibili per l'eseguibile di TeamViewer (versione completa)
-$tvFullExePaths = @(
-    "${env:ProgramFiles(x86)}\TeamViewer\TeamViewer.exe",
-    "${env:ProgramFiles}\TeamViewer\TeamViewer.exe"
+# Verifica se TeamViewer Host è già installato (usando l'eseguibile specifico del servizio)
+$tvHostExePaths = @(
+    "${env:ProgramFiles(x86)}\TeamViewer\TeamViewer_Service.exe",
+    "${env:ProgramFiles}\TeamViewer\TeamViewer_Service.exe"
+)
+$tvHostInstalled = $tvHostExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if ($tvHostInstalled) {
+    Write-Host "TeamViewer Host già installato (rilevato dal servizio)."
+    exit 0 # Esci dallo script se Host è già installato
+}
+
+# Verifica presenza di versioni TeamViewer complete (non Host) tramite registro e disinstalla
+Write-Host "Verifica presenza di versioni TeamViewer complete (tramite registro)..."
+
+# Chiavi di registro dove cercare le informazioni di disinstallazione
+$uninstallKeys = @(
+    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
 )
 
-# Cerca l'eseguibile della versione completa e disinstalla
-$tvFullExeFound = $tvFullExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+# Ricerca delle voci di registro di TeamViewer (non Host)
+$tvFullRegistry = Get-ChildItem -Path $uninstallKeys | Get-ItemProperty | Where-Object {
+    $_.DisplayName -like "TeamViewer *" -and $_.DisplayName -notlike "*Host*"
+}
 
-if ($tvFullExeFound) {
-    Write-Host "Trovata installazione completa di TeamViewer in: $tvFullExeFound"
+foreach ($app in $tvFullRegistry) {
+    Write-Host "Trovata installazione completa tramite registro: $($app.DisplayName)."
 
-    # Ricava la directory di installazione
-    $installDirFull = Split-Path -Parent $tvFullExeFound
-    $uninstallExePath = Join-Path $installDirFull "uninstall.exe"
+    # Recupera il percorso di disinstallazione
+    $uninstallString = if ($app.UninstallString) { $app.UninstallString } elseif ($app.QuietUninstallString) { $app.QuietUninstallString }
 
-    if (Test-Path $uninstallExePath) {
-        Write-Host "Trovato uninstall.exe in: $uninstallExePath. Procedo con disinstallazione silenziosa..."
-        try {
-            Start-Process -FilePath $uninstallExePath -ArgumentList "/S" -Wait -ErrorAction Stop
-            $exitCodeUninstall = $LASTEXITCODE
-            Write-Host "Disinstallazione completata con codice di uscita: $exitCodeUninstall"
-            if ($exitCodeUninstall -ne 0) {
-                Write-Warning "La disinstallazione potrebbe aver riscontrato problemi. Codice di uscita: $exitCodeUninstall"
+    if ($uninstallString) {
+        Write-Host "Comando di disinstallazione trovato: $uninstallString"
+        if ($uninstallString -like "*uninstall.exe*") {
+            Write-Host "Rilevato uninstall.exe. Esecuzione silenziosa..."
+            try {
+                Start-Process -FilePath $uninstallString -ArgumentList "/S" -Wait -ErrorAction Stop
+                $exitCodeUninstall = $LASTEXITCODE
+                Write-Host "Disinstallazione completata con codice di uscita: $exitCodeUninstall"
+                if ($exitCodeUninstall -ne 0) {
+                    Write-Warning "La disinstallazione potrebbe aver riscontrato problemi. Codice di uscita: $exitCodeUninstall"
+                }
+                Start-Sleep -Seconds 20
+            } catch {
+                Write-Warning "Errore durante l'esecuzione del comando di disinstallazione: $($_.Exception.Message)"
             }
-            Start-Sleep -Seconds 20
-        } catch {
-            Write-Warning "Errore durante l'esecuzione di uninstall.exe: $($_.Exception.Message)"
+        } else {
+            Write-Warning "Comando di disinstallazione non standard. Impossibile eseguire la disinstallazione automatica in modo sicuro."
         }
     } else {
-        Write-Warning "File uninstall.exe non trovato nella directory di installazione. Impossibile disinstallare automaticamente."
+        Write-Warning "Stringa di disinstallazione non trovata per $($app.DisplayName). Impossibile disinstallare automaticamente."
     }
-} else {
-    Write-Host "Nessuna installazione completa di TeamViewer rilevata."
 }
 
 # Percorsi possibili per TeamViewer.exe (dopo la disinstallazione o se non c'era)
@@ -66,10 +85,8 @@ $possiblePaths = @(
     "${env:ProgramFiles}\TeamViewer\TeamViewer.exe"
 )
 
-# Verifica se TeamViewer Host è già installato
-$tvExePathHost = $possiblePaths | Where-Object { $_ -like "*Host*" -and (Test-Path $_) } | Select-Object -First 1
-
-if (-not $tvExePathHost) {
+# Se TeamViewer Host non è già installato, procedi con il download e l'installazione
+if (-not $tvHostInstalled) {
     Write-Host "Scarico TeamViewer Host da: $urlmsitw"
 
     $msiPath = Join-Path $env:TEMP "TeamViewer_Host.msi"
@@ -89,9 +106,9 @@ if (-not $tvExePathHost) {
             }
             Start-Sleep -Seconds 10
 
-            # Controllo se TeamViewer.exe (Host) è stato installato
-            $tvExePathHost = $possiblePaths | Where-Object { $_ -like "*Host*" -and (Test-Path $_) } | Select-Object -First 1
-            if (-not $tvExePathHost) {
+            # Controllo se TeamViewer.exe (Host) è stato installato (cerchiamo di nuovo il servizio)
+            $tvHostInstalledCheck = $tvHostExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if (-not $tvHostInstalledCheck) {
                 Write-Host "Errore: TeamViewer Host non trovato dopo installazione."
                 exit 1
             }
@@ -103,13 +120,17 @@ if (-not $tvExePathHost) {
         Write-Error "Errore durante il download del file MSI: $($_.Exception.Message)"
         exit 1
     }
-} else {
-    Write-Host "TeamViewer Host già installato."
 }
 
 # Assegnazione dell’host
-if ($tvExePathHost) {
-    Write-Host "Procedo con assegnazione usando ID: $assignidtw"
-    Start-Process -FilePath $tvExePathHost -ArgumentList "assignment --id $assignidtw" -Wait
-    Write-Host "Installazione e assegnazione completate con successo!"
+if ($tvHostInstalled -or $tvHostInstalledCheck) {
+    # Determina il percorso dell'eseguibile Host (potrebbe essere necessario se non l'abbiamo tracciato prima)
+    $tvHostExe = $tvHostExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($tvHostExe) {
+        Write-Host "Procedo con assegnazione usando ID: $assignidtw"
+        Start-Process -FilePath $tvHostExe -ArgumentList "assignment --id $assignidtw" -Wait
+        Write-Host "Installazione e assegnazione completate con successo!"
+    } else {
+        Write-Warning "Avviso: Impossibile trovare l'eseguibile di TeamViewer Host per l'assegnazione."
+    }
 }
