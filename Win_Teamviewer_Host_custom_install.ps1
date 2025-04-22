@@ -80,8 +80,8 @@ if (-not $tvExePathHost) {
         Write-Host "Download completato con successo. File salvato in: $msiPath"
         if (Test-Path $msiPath) {
             Write-Host "File MSI trovato. Tentativo di installazione silenziosa..."
-            Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$msiPath`" /qn CUSTOMCONFIGID=$customidtw" -Wait -PassThru | Out-Null
-            $exitCodeInstall = $LASTEXITCODE
+            $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$msiPath`" /qn CUSTOMCONFIGID=$customidtw" -Wait -PassThru
+            $exitCodeInstall = $process.ExitCode
             Write-Host "Installazione completata con codice di uscita: $exitCodeInstall"
             if ($exitCodeInstall -ne 0) {
                 Write-Error "L'installazione di TeamViewer Host ha restituito un errore. Codice di uscita: $exitCodeInstall"
