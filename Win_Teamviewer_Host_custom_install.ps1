@@ -109,37 +109,26 @@ if ($tvHostInstalled) {
 }
 
 # Assegnazione dell’host
-# Percorsi possibili per la directory di installazione di TeamViewer
-$programFilesX86 = "${env:ProgramFiles(x86)}\TeamViewer"
-$programFiles = "${env:ProgramFiles}\TeamViewer"
-$tvExeName = "TeamViewer.exe"
+# Percorsi possibili per l'eseguibile di TeamViewer
+$programFilesX86Exe = Join-Path "${env:ProgramFiles(x86)}\TeamViewer" "TeamViewer.exe"
+$programFilesExe = Join-Path "${env:ProgramFiles}\TeamViewer" "TeamViewer.exe"
 
-if (Test-Path $programFilesX86) {
-    Write-Host "Cambio directory a: $programFilesX86"
-    Set-Location -Path $programFilesX86
-    $tvExeFullPath = Join-Path $programFilesX86 $tvExeName
+if (Test-Path $programFilesX86Exe) {
+    Write-Host "Tentativo di assegnazione usando: $programFilesX86Exe"
     try {
-        & "$tvExeFullPath" assignment --id "$assignidtw"
+        & "$programFilesX86Exe" assignment --id "$assignidtw"
         Write-Host "Comando di assegnazione (x86) inviato."
     } catch {
         Write-Warning "Errore durante l'assegnazione (x86): $($_.Exception.Message)"
-    } finally {
-        # Ritorna alla directory originale (opzionale, ma buona pratica)
-        Pop-Location
     }
-} elseif (Test-Path $programFiles) {
-    Write-Host "Cambio directory a: $programFiles"
-    Set-Location -Path $programFiles
-    $tvExeFullPath = Join-Path $programFiles $tvExeName
+} elseif (Test-Path $programFilesExe) {
+    Write-Host "Tentativo di assegnazione usando: $programFilesExe"
     try {
-        & "$tvExeFullPath" assignment --id "$assignidtw"
+        & "$programFilesExe" assignment --id "$assignidtw"
         Write-Host "Comando di assegnazione (x64) inviato."
     } catch {
         Write-Warning "Errore durante l'assegnazione (x64): $($_.Exception.Message)"
-    } finally {
-        # Ritorna alla directory originale (opzionale, ma buona pratica)
-        Pop-Location
     }
 } else {
-    Write-Warning "Avviso: Impossibile trovare la directory di installazione di TeamViewer per l'assegnazione."
+    Write-Warning "Avviso: Impossibile trovare l'eseguibile di TeamViewer per l'assegnazione."
 }
