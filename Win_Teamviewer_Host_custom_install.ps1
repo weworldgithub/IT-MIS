@@ -1,73 +1,78 @@
 <#
 .SYNOPSIS
-    Installs TeamViewer Host customized with API and CustomID, only TeamViewer Corporate.
+    Installa TeamViewer Host e lo assegna tramite ID, con la nuova sintassi (CUSTOMCONFIGID + assignment --id).
 
 .REQUIREMENTS
-    You will need API and custom ID to use this script.
-    You will need to upload TeamViewer Host msi on a web url
+    - MSI caricato su URL.
+    - CUSTOMCONFIGID (da Management Console).
+    - ASSIGNMENT_ID (per assegnazione automatica).
 
 .INSTRUCTIONS
-    1. Create TeamViewer Customized Host with assignment of Host.
-    2. Take notes of token of assignation and of configuration ID.
-    3. Download MSI file and upload it on your website.
-    4. In Tactical RMM, Global Settings -> Custom Fields, create custom fields for clients, so that you can create customized hosts for clients and not for users.
-    5. Fill in:
-        a) TeamViewerAPI -> Text
+    Crea in Tactical RMM:
+        a) LinkMSITW -> Text
         b) CUSTOMIDTW -> Text
-        c) LinkMSITW -> Text -> the only to fill in on global settings with your link to MSI, this will be the same for all clients.
-    6. Compile for clients:
-        a) TeamViewerAPI with token of assignation.
-        b) CUSTOMIDTW with custom ID.
-    7. Now when you will launch the script it will install TeamViewer customized Host with auto assignation and easy access already activated.
+        c) ASSIGNIDTW -> Text
 
 .NOTES
-	V1.0 Initial Release
-	
+    V2.4 - Gestisce installazione e assegnazione separate.
 #>
+
 param (
    [string] $urlmsitw,
    [string] $customidtw,
-   [string] $apitw
+   [string] $assignidtw
 )
 
 if ([string]::IsNullOrEmpty($urlmsitw)) {
     throw "URL must be defined. Use -urlmsitw <value> to pass it."
 }
 if ([string]::IsNullOrEmpty($customidtw)) {
-    throw "Custom ID must be defined. Use -customidtw <value> to pass it."
+    throw "CUSTOMCONFIGID must be defined. Use -customidtw <value> to pass it."
 }
-if ([string]::IsNullOrEmpty($apitw)) {
-    throw "API must be defined. Use -apitw <value> to pass it."
+if ([string]::IsNullOrEmpty($assignidtw)) {
+    throw "Assignment ID must be defined. Use -assignidtw <value> to pass it."
 }
-Write-Host "Running TeamViewer Host customized with API on: $env:COMPUTERNAME"
 
-    Write-Host "Checking if TeamViewer Host is installed.  Please wait..."
-    $installedSoftware = Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Where-Object {$_.DisplayName -like "*teamviewer*"}
-if ($installedSoftware){
-if (Select-String -InputObject $installedSoftware.DisplayName -Pattern "Host"){
-Write-Host "Host Client Version is installed. Converting Host."
-Set-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TeamViewer" -Name "InstallationConfigurationId" -Type String -Value $customidtw
-Write-Host "Closing TeamViewer Host."
-Taskkill /IM teamviewer.exe /F
-Write-Host "Opening and setting TeamViewer Host."
-$dirtw = ${env:ProgramFiles(x86)} + '\TeamViewer\TeamViewer.exe'
-Start-Process $dirtw -ArgumentList "assign --api-token $apitw --reassign --alias $ENV:COMPUTERNAME --grant-easy-access"
-Write-Host "Installation of TeamViewer Host completed."
+Write-Host "Controllo TeamViewer installato..."
+$installedSoftware = Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* |
+    Where-Object { $_.DisplayName -like "*TeamViewer*" }
+
+$tvPath = "${env:ProgramFiles(x86)}\TeamViewer\TeamViewer.exe"
+
+if ($installedSoftware) {
+    if ($installedSoftware.DisplayName -like "*Host*") {
+        Write-Host "TeamViewer Host è già installato. Procedo con l'assegnazione..."
+    } else {
+        Write-Host "Trovato TeamViewer Full Client. Procedo alla disinstallazione..."
+        $uninstallString = $installedSoftware.UninstallString
+        if ($uninstallString) {
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$uninstallString /quiet`"" -Wait
+            Start-Sleep -Seconds 10
+        } else {
+            Write-Host "Impossibile trovare la stringa di disinstallazione. Interruzione script."
+            exit 1
+        }
+    }
 }
-else{
-Write-Host "Full Client Version is installed. Skipping installation."
-}
-Write-host "installed version is" $installedSoftware.VersionMajor
-}
-else {
-    Write-Host "TeamVIewer Host is NOT installed. Installing now..."
-    Write-Host "Downloading TeamViewer Host from " + $urlmsitw + " Please wait..." 
-    $tmpDir = [System.IO.Path]::GetTempPath()
-    $outpath = $tmpDir + "TeamViewer_Host.msi"
-    Write-Host "Saving file to " + $outpath
+
+if (-not (Test-Path $tvPath)) {
+    # Scarica e installa
+    $tempPath = Join-Path $env:TEMP "TeamViewer_Host.msi"
+    Write-Host "Scarico MSI da $urlmsitw..."
     $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri $urlmsitw -OutFile $outpath
-    Write-Host "Running TeamViewer Host Setup... Please wait up to 10 minutes for install to complete." 
-    msiexec.exe /i $outpath /qn CUSTOMCONFIGID=$customidtw APITOKEN=$apitw ASSIGNMENTOPTIONS="--grant-easy-access"
-	Write-Host "Installation of TeamViewer Host completed."
+    Invoke-WebRequest -Uri $urlmsitw -OutFile $tempPath
+
+    Write-Host "Installazione TeamViewer Host con CUSTOMCONFIGID=$customidtw"
+    Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$tempPath`" /qn CUSTOMCONFIGID=$customidtw" -Wait
+    Start-Sleep -Seconds 10
+}
+
+# Assegnazione
+if (Test-Path $tvPath) {
+    Write-Host "Eseguo l'assegnazione con ID: $assignidtw"
+    Start-Process -FilePath $tvPath -ArgumentList "assignment --id $assignidtw" -Wait
+    Write-Host "Assegnazione completata."
+} else {
+    Write-Host "Errore: TeamViewer.exe non trovato dopo installazione."
+    exit 1
 }
