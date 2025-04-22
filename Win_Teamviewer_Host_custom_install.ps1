@@ -70,3 +70,4 @@ Write-Host "Procedo con assegnazione usando ID: $assignidtw"
 Start-Process -FilePath $tvExePath -ArgumentList "assignment --id $assignidtw" -Wait
 
 Write-Host "Installazione e assegnazione completate con successo!"
+
