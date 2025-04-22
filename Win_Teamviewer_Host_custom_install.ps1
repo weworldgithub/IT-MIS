@@ -32,7 +32,7 @@ $possibleInstallPathsFull = @(
 
 # Cerca installazioni TeamViewer complete (non Host) e disinstalla silenziosamente tramite uninstall.exe
 $tvFull = Get-CimInstance -ClassName Win32_Product | Where-Object {
-    $_.Name -like "TeamViewer*" -and $_.Name -notlike "*Host*"
+    $_.Name -like "TeamViewer *" -and $_.Name -notlike "*Host*"
 }
 
 foreach ($app in $tvFull) {
@@ -45,8 +45,13 @@ foreach ($app in $tvFull) {
         $uninstallExe = Join-Path $installDir "uninstall.exe"
         if (Test-Path $uninstallExe) {
             Write-Host "Trovato uninstall.exe in: $uninstallExe. Procedo con disinstallazione silenziosa..."
-            Start-Process -FilePath $uninstallExe -ArgumentList "/S" -Wait
-            Start-Sleep -Seconds 15 # Aumento la pausa per dare tempo alla disinstallazione
+            Start-Process -FilePath $uninstallExe -ArgumentList "/S" -Wait -PassThru | Out-Null # Aggiunto -PassThru per catturare eventuali errori
+            $exitCodeUninstall = $LASTEXITCODE
+            Write-Host "Disinstallazione completata con codice di uscita: $exitCodeUninstall"
+            if ($exitCodeUninstall -ne 0) {
+                Write-Warning "La disinstallazione potrebbe aver riscontrato problemi. Codice di uscita: $exitCodeUninstall"
+            }
+            Start-Sleep -Seconds 20 # Aumento ulteriore della pausa
         } else {
             Write-Warning "File uninstall.exe non trovato nella directory di installazione di TeamViewer. Impossibile disinstallare automaticamente."
         }
@@ -65,20 +70,37 @@ $possiblePaths = @(
 $tvExePathHost = $possiblePaths | Where-Object { $_ -like "*Host*" -and (Test-Path $_) } | Select-Object -First 1
 
 if (-not $tvExePathHost) {
-    Write-Host "Scarico e installo TeamViewer Host da: $urlmsitw"
+    Write-Host "Scarico TeamViewer Host da: $urlmsitw"
 
     $msiPath = Join-Path $env:TEMP "TeamViewer_Host.msi"
     $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri $urlmsitw -OutFile $msiPath
+    try {
+        Invoke-WebRequest -Uri $urlmsitw -OutFile $msiPath -ErrorAction Stop
+        Write-Host "Download completato con successo."
+        if (Test-Path $msiPath) {
+            Write-Host "File MSI scaricato in: $msiPath"
+            Write-Host "Installazione silenziosa in corso..."
+            Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$msiPath`" /qn CUSTOMCONFIGID=$customidtw" -Wait -PassThru | Out-Null
+            $exitCodeInstall = $LASTEXITCODE
+            Write-Host "Installazione completata con codice di uscita: $exitCodeInstall"
+            if ($exitCodeInstall -ne 0) {
+                Write-Error "L'installazione di TeamViewer Host ha restituito un errore. Codice di uscita: $exitCodeInstall"
+                exit 1
+            }
+            Start-Sleep -Seconds 10
 
-    Write-Host "Installazione silenziosa in corso..."
-    Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$msiPath`" /qn CUSTOMCONFIGID=$customidtw" -Wait
-    Start-Sleep -Seconds 10
-
-    # Controllo se TeamViewer.exe (Host) è stato installato
-    $tvExePathHost = $possiblePaths | Where-Object { $_ -like "*Host*" -and (Test-Path $_) } | Select-Object -First 1
-    if (-not $tvExePathHost) {
-        Write-Host "Errore: TeamViewer Host non trovato dopo installazione."
+            # Controllo se TeamViewer.exe (Host) è stato installato
+            $tvExePathHost = $possiblePaths | Where-Object { $_ -like "*Host*" -and (Test-Path $_) } | Select-Object -First 1
+            if (-not $tvExePathHost) {
+                Write-Host "Errore: TeamViewer Host non trovato dopo installazione."
+                exit 1
+            }
+        } else {
+            Write-Error "Errore: File MSI non trovato dopo il download."
+            exit 1
+        }
+    } catch {
+        Write-Error "Errore durante il download del file MSI: $($_.Exception.Message)"
         exit 1
     }
 } else {
