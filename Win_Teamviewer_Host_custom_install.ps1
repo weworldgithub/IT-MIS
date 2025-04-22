@@ -24,40 +24,6 @@ if ([string]::IsNullOrEmpty($assignidtw))  { throw "Assignment ID mancante. Usa 
 
 Write-Host "Verifica presenza di versioni TeamViewer installate..."
 
-# Verifica se TeamViewer Host è già installato e, in caso affermativo, tenta l'assegnazione e esci
-$tvHostInstalled = Get-ChildItem -Path @(
-    "${env:ProgramFiles(x86)}\TeamViewer\TeamViewer_Service.exe",
-    "${env:ProgramFiles}\TeamViewer\TeamViewer_Service.exe"
-) -ErrorAction SilentlyContinue | Select-Object -First 1
-
-if ($tvHostInstalled) {
-    Write-Host "TeamViewer Host già installato (rilevato dal servizio)."
-    # Assegnazione dell’host (stessa logica della sezione precedente)
-    $programFilesX86Exe = Join-Path "${env:ProgramFiles(x86)}\TeamViewer" "TeamViewer.exe"
-    $programFilesExe = Join-Path "${env:ProgramFiles}\TeamViewer" "TeamViewer.exe"
-
-    if (Test-Path $programFilesX86Exe) {
-        Write-Host "Tentativo di assegnazione usando: $programFilesX86Exe"
-        try {
-            & "$programFilesX86Exe" assignment --id "$assignidtw"
-            Write-Host "Comando di assegnazione (x86) inviato."
-        } catch {
-            Write-Warning "Errore durante l'assegnazione (x86): $($_.Exception.Message)"
-        }
-    } elseif (Test-Path $programFilesExe) {
-        Write-Host "Tentativo di assegnazione usando: $programFilesExe"
-        try {
-            & "$programFilesExe" assignment --id "$assignidtw"
-            Write-Host "Comando di assegnazione (x64) inviato."
-        } catch {
-            Write-Warning "Errore durante l'assegnazione (x64): $($_.Exception.Message)"
-        }
-    } else {
-        Write-Warning "Avviso: Impossibile trovare l'eseguibile di TeamViewer per l'assegnazione."
-    }
-    exit 0
-}
-
 # Verifica presenza di versioni TeamViewer complete (non Host) tramite registro e disinstalla
 Write-Host "Verifica presenza di versioni TeamViewer complete (tramite registro - filtro preciso)..."
 
@@ -101,55 +67,87 @@ foreach ($app in $tvFullRegistry) {
     }
 }
 
-# Scarico e installazione di TeamViewer Host
-Write-Host "Scarico TeamViewer Host da: $urlmsitw"
+# Verifica se TeamViewer Host è già installato
+$tvHostInstalled = Get-ChildItem -Path @(
+    "${env:ProgramFiles(x86)}\TeamViewer\TeamViewer_Service.exe",
+    "${env:ProgramFiles}\TeamViewer\TeamViewer_Service.exe"
+) -ErrorAction SilentlyContinue | Select-Object -First 1
 
-$msiPath = Join-Path $env:TEMP "TeamViewer_Host.msi"
-$ProgressPreference = 'SilentlyContinue'
-try {
-    Write-Host "Tentativo di download del file MSI..."
-    Invoke-WebRequest -Uri $urlmsitw -OutFile $msiPath -ErrorAction Stop
-    Write-Host "Download completato con successo. File salvato in: $msiPath"
-    if (Test-Path $msiPath) {
-        Write-Host "File MSI trovato. Tentativo di installazione silenziosa..."
-        $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$msiPath`" /qn CUSTOMCONFIGID=$customidtw" -Wait -PassThru
-        $exitCodeInstall = $process.ExitCode
-        Write-Host "Installazione completata con codice di uscita: $exitCodeInstall"
-        if ($exitCodeInstall -ne 0) {
-            Write-Error "L'installazione di TeamViewer Host ha restituito un errore. Codice di uscita: $exitCodeInstall"
-            exit 1
+if ($tvHostInstalled) {
+    Write-Host "TeamViewer Host già installato (rilevato dal servizio). Tentativo di assegnazione..."
+    $programFilesX86ExeHost = Join-Path "${env:ProgramFiles(x86)}\TeamViewer" "TeamViewer.exe"
+    $programFilesExeHost = Join-Path "${env:ProgramFiles}\TeamViewer" "TeamViewer.exe"
+
+    if (Test-Path $programFilesX86ExeHost) {
+        Write-Host "Tentativo di assegnazione usando: $programFilesX86ExeHost"
+        try {
+            & "$programFilesX86ExeHost" assignment --id "$assignidtw"
+            Write-Host "Comando di assegnazione (x86) inviato."
+        } catch {
+            Write-Warning "Errore durante l'assegnazione (x86): $($_.Exception.Message)"
         }
-        Start-Sleep -Seconds 10
+    } elseif (Test-Path $programFilesExeHost) {
+        Write-Host "Tentativo di assegnazione usando: $programFilesExeHost"
+        try {
+            & "$programFilesExeHost" assignment --id "$assignidtw"
+            Write-Host "Comando di assegnazione (x64) inviato."
+        } catch {
+            Write-Warning "Errore durante l'assegnazione (x64): $($_.Exception.Message)"
+        }
     } else {
-        Write-Error "Errore: File MSI non trovato dopo il download."
-        exit 1
-    }
-} catch {
-    Write-Error "Errore durante il download del file MSI: $($_.Exception.Message)"
-    exit 1
-}
-
-# Assegnazione di TeamViewer Host (dopo l'installazione)
-Write-Host "Tentativo di assegnazione di TeamViewer Host..."
-$programFilesX86ExeHost = Join-Path "${env:ProgramFiles(x86)}\TeamViewer" "TeamViewer.exe"
-$programFilesExeHost = Join-Path "${env:ProgramFiles}\TeamViewer" "TeamViewer.exe"
-
-if (Test-Path $programFilesX86ExeHost) {
-    Write-Host "Tentativo di assegnazione usando: $programFilesX86ExeHost"
-    try {
-        & "$programFilesX86ExeHost" assignment --id "$assignidtw"
-        Write-Host "Comando di assegnazione (x86) inviato."
-    } catch {
-        Write-Warning "Errore durante l'assegnazione (x86) dopo installazione: $($_.Exception.Message)"
-    }
-} elseif (Test-Path $programFilesExeHost) {
-    Write-Host "Tentativo di assegnazione usando: $programFilesExeHost"
-    try {
-        & "$programFilesExeHost" assignment --id "$assignidtw"
-        Write-Host "Comando di assegnazione (x64) inviato."
-    } catch {
-        Write-Warning "Errore durante l'assegnazione (x64) dopo installazione: $($_.Exception.Message)"
+        Write-Warning "Avviso: Impossibile trovare l'eseguibile di TeamViewer per l'assegnazione."
     }
 } else {
-    Write-Warning "Avviso: Impossibile trovare l'eseguibile di TeamViewer Host per l'assegnazione dopo l'installazione."
+    # Scarico e installazione di TeamViewer Host
+    Write-Host "Scarico TeamViewer Host da: $urlmsitw"
+
+    $msiPath = Join-Path $env:TEMP "TeamViewer_Host.msi"
+    $ProgressPreference = 'SilentlyContinue'
+    try {
+        Write-Host "Tentativo di download del file MSI..."
+        Invoke-WebRequest -Uri $urlmsitw -OutFile $msiPath -ErrorAction Stop
+        Write-Host "Download completato con successo. File salvato in: $msiPath"
+        if (Test-Path $msiPath) {
+            Write-Host "File MSI trovato. Tentativo di installazione silenziosa..."
+            $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$msiPath`" /qn CUSTOMCONFIGID=$customidtw" -Wait -PassThru
+            $exitCodeInstall = $process.ExitCode
+            Write-Host "Installazione completata con codice di uscita: $exitCodeInstall"
+            if ($exitCodeInstall -ne 0) {
+                Write-Error "L'installazione di TeamViewer Host ha restituito un errore. Codice di uscita: $exitCodeInstall"
+                exit 1
+            }
+            Start-Sleep -Seconds 10
+        } else {
+            Write-Error "Errore: File MSI non trovato dopo il download."
+            exit 1
+        }
+    } catch {
+        Write-Error "Errore durante il download del file MSI: $($_.Exception.Message)"
+        exit 1
+    }
+
+    # Assegnazione di TeamViewer Host (dopo l'installazione)
+    Write-Host "Tentativo di assegnazione di TeamViewer Host (dopo installazione)..."
+    $programFilesX86ExeHost = Join-Path "${env:ProgramFiles(x86)}\TeamViewer" "TeamViewer.exe"
+    $programFilesExeHost = Join-Path "${env:ProgramFiles}\TeamViewer" "TeamViewer.exe"
+
+    if (Test-Path $programFilesX86ExeHost) {
+        Write-Host "Tentativo di assegnazione usando: $programFilesX86ExeHost"
+        try {
+            & "$programFilesX86ExeHost" assignment --id "$assignidtw"
+            Write-Host "Comando di assegnazione (x86) inviato."
+        } catch {
+            Write-Warning "Errore durante l'assegnazione (x86) dopo installazione: $($_.Exception.Message)"
+        }
+    } elseif (Test-Path $programFilesExeHost) {
+        Write-Host "Tentativo di assegnazione usando: $programFilesExeHost"
+        try {
+            & "$programFilesExeHost" assignment --id "$assignidtw"
+            Write-Host "Comando di assegnazione (x64) inviato."
+        } catch {
+            Write-Warning "Errore durante l'assegnazione (x64) dopo installazione: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Warning "Avviso: Impossibile trovare l'eseguibile di TeamViewer Host per l'assegnazione dopo l'installazione."
+    }
 }
