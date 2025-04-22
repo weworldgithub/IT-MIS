@@ -110,12 +110,23 @@ if ($tvHostInstalled) {
 
 # Assegnazione dell’host
 # Determina il percorso dell'eseguibile Host
+$tvHostExePaths = @(
+    "${env:ProgramFiles(x86)}\TeamViewer\TeamViewer_Service.exe",
+    "${env:ProgramFiles}\TeamViewer\TeamViewer_Service.exe",
+    "${env:ProgramFiles(x86)}\TeamViewer\TeamViewer.exe", # Fallback
+    "${env:ProgramFiles}\TeamViewer\TeamViewer.exe"      # Fallback
+)
 $tvHostExe = $tvHostExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 
 if ($tvHostExe) {
+    Write-Host "Percorso dell'eseguibile Host trovato: $tvHostExe"
     Write-Host "Procedo con assegnazione usando ID: $assignidtw"
-    Start-Process -FilePath $tvHostExe -ArgumentList "assignment --id $assignidtw" -Wait
-    Write-Host "Assegnazione completata con successo!"
+    try {
+        Start-Process -FilePath $tvHostExe -ArgumentList "assignment --id $assignidtw" -Wait -ErrorAction Stop
+        Write-Host "Assegnazione completata con successo!"
+    } catch {
+        Write-Warning "Errore durante l'assegnazione: $($_.Exception.Message)"
+    }
 } else {
     Write-Warning "Avviso: Impossibile trovare l'eseguibile di TeamViewer Host per l'assegnazione."
 }
