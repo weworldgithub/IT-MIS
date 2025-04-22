@@ -71,3 +71,4 @@ Start-Process -FilePath $tvExePath -ArgumentList "assignment --id $assignidtw" -
 
 Write-Host "Installazione e assegnazione completate con successo!"
 
+
