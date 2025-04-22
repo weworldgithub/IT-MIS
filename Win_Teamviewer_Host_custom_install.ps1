@@ -35,7 +35,7 @@ if ($installedSoftware) {
     $tvEntry = $installedSoftware | Select-Object -First 1
     if ($tvEntry.DisplayName -notlike "*Host*") {
         Write-Host "Found TeamViewer Full Client. Proceeding with silent uninstall..."
-        # Fix: Correctly escape single quotes for wmic
+        # Silent uninstall with wmic
         $uninstallCommand = 'wmic product where "name = \'TeamViewer\'" call uninstall /nointeractive'
         Start-Process -FilePath "cmd.exe" -ArgumentList "/c $uninstallCommand" -Wait
         Start-Sleep -Seconds 10
