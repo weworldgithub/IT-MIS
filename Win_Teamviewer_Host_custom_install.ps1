@@ -37,7 +37,7 @@ if ($tvHostInstalled) {
 }
 
 # Verifica presenza di versioni TeamViewer complete (non Host) tramite registro e disinstalla
-Write-Host "Verifica presenza di versioni TeamViewer complete (tramite registro)..."
+Write-Host "Verifica presenza di versioni TeamViewer complete (tramite registro - filtro preciso)..."
 
 # Chiavi di registro dove cercare le informazioni di disinstallazione
 $uninstallKeys = @(
@@ -45,13 +45,13 @@ $uninstallKeys = @(
     'HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
 )
 
-# Ricerca delle voci di registro di TeamViewer (non Host)
+# Ricerca delle voci di registro di TeamViewer che NON contengono "Host" nel DisplayName
 $tvFullRegistry = Get-ChildItem -Path $uninstallKeys | Get-ItemProperty | Where-Object {
-    $_.DisplayName -like "TeamViewer *" -and $_.DisplayName -notlike "*Host*"
+    $_.DisplayName -like "TeamViewer" -and $_.DisplayName -notlike "*Host*" -and $_.UninstallString -like "*TeamViewer*"
 }
 
 foreach ($app in $tvFullRegistry) {
-    Write-Host "Trovata installazione completa tramite registro: $($app.DisplayName)."
+    Write-Host "Trovata installazione completa tramite registro (filtrata): $($app.DisplayName)."
 
     # Recupera il percorso di disinstallazione
     $uninstallString = if ($app.UninstallString) { $app.UninstallString } elseif ($app.QuietUninstallString) { $app.QuietUninstallString }
@@ -77,6 +77,8 @@ foreach ($app in $tvFullRegistry) {
     } else {
         Write-Warning "Stringa di disinstallazione non trovata per $($app.DisplayName). Impossibile disinstallare automaticamente."
     }
+} else {
+    Write-Host "Nessuna installazione completa di TeamViewer rilevata (tramite filtro registro)."
 }
 
 # Percorsi possibili per TeamViewer.exe (dopo la disinstallazione o se non c'era)
@@ -106,7 +108,7 @@ if (-not $tvHostInstalled) {
             }
             Start-Sleep -Seconds 10
 
-            # Controllo se TeamViewer.exe (Host) è stato installato (cerchiamo di nuovo il servizio)
+            # Controllo se TeamViewer Host è stato installato (cerchiamo di nuovo il servizio)
             $tvHostInstalledCheck = $tvHostExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
             if (-not $tvHostInstalledCheck) {
                 Write-Host "Errore: TeamViewer Host non trovato dopo installazione."
