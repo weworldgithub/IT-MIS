@@ -109,18 +109,34 @@ if ($tvHostInstalled) {
 }
 
 # Assegnazione dell’host
-# Determina il percorso dell'eseguibile Host
-$tvHostExe = $tvHostExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+# Percorsi possibili per la directory di installazione di TeamViewer
+$programFilesX86 = "${env:ProgramFiles(x86)}\TeamViewer"
+$programFiles = "${env:ProgramFiles}\TeamViewer"
 
-if ($tvHostExe) {
-    Write-Host "Percorso dell'eseguibile Host trovato (per assegnazione): $tvHostExe"
-    Write-Host "Procedo con assegnazione usando ID: $assignidtw"
+if (Test-Path $programFilesX86) {
+    Write-Host "Cambio directory a: $programFilesX86"
+    Set-Location -Path $programFilesX86
     try {
-        Start-Process -FilePath $tvHostExe -ArgumentList "assignment", "--id", "$assignidtw" -Wait -ErrorAction Stop
-        Write-Host "Assegnazione completata con successo (con attesa)."
+        .\TeamViewer.exe assignment --id "$assignidtw"
+        Write-Host "Comando di assegnazione (x86) inviato."
     } catch {
-        Write-Warning "Errore durante l'assegnazione (con attesa): $($_.Exception.Message)"
+        Write-Warning "Errore durante l'assegnazione (x86): $($_.Exception.Message)"
+    } finally {
+        # Ritorna alla directory originale (opzionale, ma buona pratica)
+        Pop-Location
+    }
+} elseif (Test-Path $programFiles) {
+    Write-Host "Cambio directory a: $programFiles"
+    Set-Location -Path $programFiles
+    try {
+        .\TeamViewer.exe assignment --id "$assignidtw"
+        Write-Host "Comando di assegnazione (x64) inviato."
+    } catch {
+        Write-Warning "Errore durante l'assegnazione (x64): $($_.Exception.Message)"
+    } finally {
+        # Ritorna alla directory originale (opzionale, ma buona pratica)
+        Pop-Location
     }
 } else {
-    Write-Warning "Avviso: Impossibile trovare l'eseguibile di TeamViewer Host per l'assegnazione."
+    Write-Warning "Avviso: Impossibile trovare la directory di installazione di TeamViewer per l'assegnazione."
 }
